@@ -3,9 +3,6 @@ package com.atlasdblite.models;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Represents a generic entity in the graph (e.g., Person, Server, Task).
- */
 public class Node {
     private final String id;
     private final String label;
@@ -22,11 +19,11 @@ public class Node {
     }
 
     public String getId() { return id; }
-    public String getProperty(String key) { return properties.get(key); }
     public String getLabel() { return label; }
+    public Map<String, String> getProperties() { return properties; }
 
     @Override
     public String toString() {
-        return String.format("[%s:%s] %s", label, id, properties);
+        return String.format("(%s:%s) %s", id, label, properties);
     }
 }

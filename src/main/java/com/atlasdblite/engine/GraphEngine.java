@@ -6,19 +6,13 @@ import com.atlasdblite.models.Node;
 import com.atlasdblite.models.Relation;
 
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.file.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * AtlasDB-Lite Core Engine.
- * Manages in-memory graph state and handles disk persistence.
- */
 public class GraphEngine {
     private Map<String, Node> nodeIndex = new HashMap<>();
     private List<Relation> relationStore = new ArrayList<>();
-    
     private final String storagePath;
     private final Gson gson;
 
@@ -28,68 +22,56 @@ public class GraphEngine {
         initializeStorage();
     }
 
-    // --- Transactional Operations ---
-
     public void persistNode(Node node) {
         nodeIndex.put(node.getId(), node);
-        commit(); // Commit to disk
+        commit();
     }
 
     public void persistRelation(String fromId, String toId, String type) {
         if (!nodeIndex.containsKey(fromId) || !nodeIndex.containsKey(toId)) {
-            throw new IllegalStateException("Integrity Error: Both nodes must exist before linking.");
+            throw new IllegalArgumentException("Error: Source or Target node does not exist.");
         }
         relationStore.add(new Relation(fromId, toId, type));
-        commit(); // Commit to disk
+        commit();
     }
 
-    // --- Query Layer ---
+    public Collection<Node> getAllNodes() {
+        return nodeIndex.values();
+    }
 
     public List<Node> traverse(String fromId, String relationType) {
         return relationStore.stream()
-                .filter(r -> r.getSourceId().equals(fromId) && r.getType().equals(relationType))
+                .filter(r -> r.getSourceId().equals(fromId) && r.getType().equalsIgnoreCase(relationType))
                 .map(r -> nodeIndex.get(r.getTargetId()))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
-
-    // --- Storage Layer ---
 
     private void commit() {
         try (Writer writer = new FileWriter(storagePath)) {
             StorageSchema schema = new StorageSchema(nodeIndex, relationStore);
             gson.toJson(schema, writer);
         } catch (IOException e) {
-            System.err.println("[AtlasDB] Write Error: " + e.getMessage());
+            System.err.println("IO Error: " + e.getMessage());
         }
     }
 
     private void initializeStorage() {
-        if (!Files.exists(Paths.get(storagePath))) {
-            System.out.println("[AtlasDB] New storage file created: " + storagePath);
-            return;
-        }
-        
+        if (!Files.exists(Paths.get(storagePath))) return;
         try (Reader reader = new FileReader(storagePath)) {
             StorageSchema schema = gson.fromJson(reader, StorageSchema.class);
             if (schema != null) {
-                this.nodeIndex = schema.nodes != null ? schema.nodes : new HashMap<>();
-                this.relationStore = schema.relations != null ? schema.relations : new ArrayList<>();
-                System.out.println("[AtlasDB] Loaded " + nodeIndex.size() + " nodes from disk.");
+                if (schema.nodes != null) this.nodeIndex = schema.nodes;
+                if (schema.relations != null) this.relationStore = schema.relations;
             }
         } catch (IOException e) {
-            System.err.println("[AtlasDB] Read Error: " + e.getMessage());
+            System.err.println("Could not load database: " + e.getMessage());
         }
     }
 
-    // Internal Schema for JSON Serialization
     private static class StorageSchema {
         Map<String, Node> nodes;
         List<Relation> relations;
-
-        StorageSchema(Map<String, Node> nodes, List<Relation> relations) {
-            this.nodes = nodes;
-            this.relations = relations;
-        }
+        StorageSchema(Map<String, Node> n, List<Relation> r) { this.nodes = n; this.relations = r; }
     }
 }

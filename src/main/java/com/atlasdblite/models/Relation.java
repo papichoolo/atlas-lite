@@ -1,12 +1,9 @@
 package com.atlasdblite.models;
 
-/**
- * Represents a directional link between two nodes.
- */
 public class Relation {
     private final String sourceId;
     private final String targetId;
-    private final String type; // e.g., "REPORTS_TO"
+    private final String type;
 
     public Relation(String sourceId, String targetId, String type) {
         this.sourceId = sourceId;
@@ -20,6 +17,6 @@ public class Relation {
 
     @Override
     public String toString() {
-        return String.format("(%s)-[%s]->(%s)", sourceId, type, targetId);
+        return String.format("(%s)-[:%s]->(%s)", sourceId, type, targetId);
     }
 }
