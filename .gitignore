@@ -1,3 +1,5 @@
 .vscode
 target
 atlas_data.json
+atlas_data.enc
+atlas.key
