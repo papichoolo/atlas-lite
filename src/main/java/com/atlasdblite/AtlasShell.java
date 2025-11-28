@@ -5,34 +5,31 @@ import com.atlasdblite.commands.*;
 import java.util.Scanner;
 
 public class AtlasShell {
-    // Encrypted storage file
     private static final String DB_FILE = "atlas_data.enc";
 
     public static void main(String[] args) {
         GraphEngine engine = new GraphEngine(DB_FILE);
         CommandRegistry registry = new CommandRegistry();
 
-        // 1. Core CRUD
+        // Register Commands
         registry.register(new AddNodeCommand());
         registry.register(new UpdateNodeCommand());
         registry.register(new DeleteNodeCommand());
         registry.register(new LinkCommand());
-        
-        // 2. Querying
         registry.register(new ShowCommand());
         registry.register(new QueryCommand());
-        registry.register(new SearchCommand()); // NEW
-
-        // 3. Admin & Safety
+        registry.register(new SearchCommand());
         registry.register(new StatsCommand());
-        registry.register(new BackupCommand()); // NEW
+        registry.register(new BackupCommand());
         registry.register(new ExportCommand());
         registry.register(new NukeCommand());
+        
+        // NEW: Register Server Command
+        registry.register(new ServerCommand());
 
         Scanner scanner = new Scanner(System.in);
         printBanner();
 
-        // REPL Loop
         while (true) {
             System.out.print("atlas-secure> ");
             String input = scanner.nextLine().trim();
@@ -63,8 +60,12 @@ public class AtlasShell {
                 System.out.println(" Unknown command. Type 'help'.");
             }
         }
+        
+        // Cleanup: Force stop server if running on exit
+        new ServerCommand().execute(new String[]{"server", "stop"}, engine);
         System.out.println("Session closed. Data encrypted.");
         scanner.close();
+        System.exit(0);
     }
 
     private static void printBanner() {
@@ -73,6 +74,6 @@ public class AtlasShell {
         System.out.println("  / _ \\| __| |/ _` / __|| | | |  _ \\ ");
         System.out.println(" / ___ \\ |_| | (_| \\__ \\| |_| | |_) |");
         System.out.println("/_/   \\_\\__|_|\\__,_|___/|____/|____/ ");
-        System.out.println("      SECURE SHELL v2.1 | AES-256    ");
+        System.out.println("      SECURE SHELL v2.2 | WEB API    ");
     }
 }
