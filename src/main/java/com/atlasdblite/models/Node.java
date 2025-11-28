@@ -20,6 +20,7 @@ public class Node {
 
     public String getId() { return id; }
     public String getLabel() { return label; }
+    public String getProperty(String key) { return properties.get(key); }
     public Map<String, String> getProperties() { return properties; }
 
     @Override
