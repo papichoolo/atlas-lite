@@ -63,6 +63,7 @@ public class AtlasShell {
         new ServerCommand().execute(new String[]{"server", "stop"}, engine);
         System.out.println("Session closed. Shards saved.");
         System.exit(0);
+        scanner.close();
     }
 
     private static void printBanner() {
