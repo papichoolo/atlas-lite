@@ -2,47 +2,62 @@ package com.atlasdblite.commands;
 
 import com.atlasdblite.engine.GraphEngine;
 import com.atlasdblite.models.Node;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
-/**
- * Command to create a directed relationship (link) between two nodes.
- * It intelligently resolves the source and target nodes from user queries before creating the link.
- */
 public class LinkCommand extends AbstractCommand {
     @Override
     public String getName() { return "link"; }
 
     @Override
-    public String getDescription() { return "Connects nodes. Usage: link <from_search> <to_search> <type>"; }
+    public String getDescription() { 
+        return "Connects nodes. Usage: link <from> <to> <type> [key:val]..."; 
+    }
 
-    /**
-     * Executes the link creation process.
-     * It uses the inherited {@code resolveNode} method to find both the source and target nodes,
-     * handling any ambiguity through interactive prompts.
-     *
-     * @param args The command arguments, containing the source/target search terms and the link type.
-     * @param engine The {@link GraphEngine} instance where the new relationship will be stored.
-     */
     @Override
     public void execute(String[] args, GraphEngine engine) {
-        if (!validateArgs(args, 3, "link <from_search> <to_search> <type>")) return;
+        if (!validateArgs(args, 3, "link <from> <to> <type> [prop:val]")) return;
 
-        // Use the shared, intelligent node resolver to find the source node.
+        // Resolve Nodes
         System.out.println(" ... Resolving Source: '" + args[1] + "'");
         Node sourceNode = resolveNode(args[1], engine);
-        if (sourceNode == null) return; // Halt if node not found or user cancelled.
+        if (sourceNode == null) return; 
 
-        // Resolve the target node.
         System.out.println(" ... Resolving Target: '" + args[2] + "'");
         Node targetNode = resolveNode(args[2], engine);
-        if (targetNode == null) return; // Halt if node not found or user cancelled.
+        if (targetNode == null) return; 
+
+        String type = args[3].toUpperCase();
+        Map<String, Object> props = new HashMap<>();
+
+        // Parse Properties (Index 4 onwards)
+        for (int i = 4; i < args.length; i++) {
+            String rawArg = args[i];
+            int splitIndex = rawArg.indexOf(":");
+            if (splitIndex > 0) {
+                String key = rawArg.substring(0, splitIndex);
+                String value = rawArg.substring(splitIndex + 1);
+
+                if (value.startsWith("[") && value.endsWith("]")) {
+                    String content = value.substring(1, value.length() - 1);
+                    List<String> listValue = Arrays.stream(content.split(","))
+                            .map(String::trim)
+                            .collect(Collectors.toList());
+                    props.put(key, listValue);
+                } else {
+                    props.put(key, value);
+                }
+            }
+        }
 
         try {
-            // Persist the new relationship to the database.
-            String relationType = args[3].toUpperCase();
-            engine.persistRelation(sourceNode.getId(), targetNode.getId(), relationType);
-            printSuccess("Linked: " + sourceNode.getId() + " --[" + relationType + "]--> " + targetNode.getId());
+            engine.persistRelation(sourceNode.getId(), targetNode.getId(), type, props);
+            String propStr = props.isEmpty() ? "" : " " + props;
+            printSuccess("Linked: " + sourceNode.getId() + " --[" + type + propStr + "]--> " + targetNode.getId());
         } catch (Exception e) {
-            // Catch potential errors, such as if a node was deleted between resolution and persistence.
             printError(e.getMessage());
         }
     }

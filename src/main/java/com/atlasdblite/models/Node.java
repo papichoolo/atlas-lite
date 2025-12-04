@@ -3,7 +3,9 @@ package com.atlasdblite.models;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -14,7 +16,8 @@ import java.util.Map;
 public class Node {
     private final String id;
     private final String label;
-    private final Map<String, String> properties;
+    // Changed from String to Object to support Lists
+    private final Map<String, Object> properties;
 
     /**
      * Constructs a new Node.
@@ -32,21 +35,22 @@ public class Node {
     /**
      * Adds or updates a property on the node.
      * @param key The property key.
-     * @param value The property value.
+     * @param value The property value (String or List).
      */
-    public void addProperty(String key, String value) {
+    public void addProperty(String key, Object value) {
         // Keys are also interned for memory efficiency, as they are often repeated.
         this.properties.put(key.intern(), value);
     }
 
     public String getId() { return id; }
     public String getLabel() { return label; }
-    public Map<String, String> getProperties() { return properties; }
+    public Map<String, Object> getProperties() { return properties; }
 
     // --- Binary Serialization ---
 
     /**
      * Writes the node's data to a binary output stream for persistence.
+     * Supports both String and List property types.
      * @param out The {@link DataOutputStream} to write to.
      * @throws IOException If an I/O error occurs.
      */
@@ -54,14 +58,28 @@ public class Node {
         out.writeUTF(id);
         out.writeUTF(label);
         out.writeInt(properties.size());
-        for (Map.Entry<String, String> entry : properties.entrySet()) {
+        
+        for (Map.Entry<String, Object> entry : properties.entrySet()) {
             out.writeUTF(entry.getKey());
-            out.writeUTF(entry.getValue());
+            Object val = entry.getValue();
+            
+            if (val instanceof List) {
+                out.writeByte(2); // Type 2: List
+                List<?> list = (List<?>) val;
+                out.writeInt(list.size());
+                for (Object item : list) {
+                    out.writeUTF(item.toString());
+                }
+            } else {
+                out.writeByte(1); // Type 1: String
+                out.writeUTF(val.toString());
+            }
         }
     }
 
     /**
      * Creates a Node instance by reading data from a binary input stream.
+     * Handles type reconstruction for Strings and Lists.
      * @param in The {@link DataInputStream} to read from.
      * @return A new {@link Node} instance.
      * @throws IOException If an I/O error occurs or the stream is malformed.
@@ -74,14 +92,25 @@ public class Node {
         int propCount = in.readInt();
         for (int i = 0; i < propCount; i++) {
             String key = in.readUTF();
-            String value = in.readUTF();
-            node.addProperty(key, value);
+            byte type = in.readByte();
+            
+            if (type == 2) { // List
+                int listSize = in.readInt();
+                List<String> list = new ArrayList<>();
+                for (int j = 0; j < listSize; j++) {
+                    list.add(in.readUTF());
+                }
+                node.addProperty(key, list);
+            } else { // String (Default)
+                String value = in.readUTF();
+                node.addProperty(key, value);
+            }
         }
         return node;
     }
 
     @Override
     public String toString() {
-        return String.format("(%s:%s) %s", id, label, properties);
+        return String.format("[ID: %s | Label: %s] %s", id, label, properties);
     }
 }

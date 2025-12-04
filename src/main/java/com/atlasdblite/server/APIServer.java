@@ -14,6 +14,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -30,43 +31,31 @@ public class APIServer {
 
     public void start(int port) throws IOException {
         if (server != null) return;
-
         server = HttpServer.create(new InetSocketAddress(port), 0);
         server.setExecutor(Executors.newCachedThreadPool());
 
+        // 1. Dashboard UI
         server.createContext("/", exchange -> {
             if (!exchange.getRequestURI().getPath().equals("/")) {
                 sendResponse(exchange, 404, "Not Found");
                 return;
             }
             try (InputStream is = getClass().getResourceAsStream("/web/index.html")) {
-                if (is == null) {
-                    sendResponse(exchange, 500, "Dashboard file not found in resources.");
-                    return;
-                }
+                if (is == null) { sendResponse(exchange, 500, "Dashboard not found"); return; }
                 byte[] htmlBytes = is.readAllBytes();
                 exchange.getResponseHeaders().set("Content-Type", "text/html");
                 exchange.sendResponseHeaders(200, htmlBytes.length);
-                try (OutputStream os = exchange.getResponseBody()) {
-                    os.write(htmlBytes);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-                sendResponse(exchange, 500, "Internal Server Error");
-            }
+                try (OutputStream os = exchange.getResponseBody()) { os.write(htmlBytes); }
+            } catch (Exception e) { sendResponse(exchange, 500, "Error"); }
         });
 
+        // 2. Full Graph Data
         server.createContext("/api/graph", exchange -> {
             GraphDTO dto = new GraphDTO(engine.getAllNodes(), engine.getAllRelations());
             sendResponse(exchange, 200, gson.toJson(dto));
         });
 
-        server.createContext("/api/status", exchange -> 
-            sendResponse(exchange, 200, "{\"status\":\"online\",\"engine\":\"AtlasDB-Lite\"}"));
-
-        server.createContext("/api/nodes", exchange -> 
-            sendResponse(exchange, 200, gson.toJson(engine.getAllNodes())));
-
+        // 3. Create Node
         server.createContext("/api/node", exchange -> {
             if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
                 try {
@@ -81,57 +70,55 @@ public class APIServer {
             }
         });
 
+        // 4. Create Link (Updated for Props)
         server.createContext("/api/link", exchange -> {
             if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
                 try {
                     LinkDTO dto = parseBody(exchange, LinkDTO.class);
-                    engine.persistRelation(dto.from, dto.to, dto.type);
+                    Map<String, Object> props = dto.props != null ? dto.props : new HashMap<>();
+                    engine.persistRelation(dto.from, dto.to, dto.type, props);
                     sendResponse(exchange, 201, "{\"message\":\"Link Created\"}");
-                } catch (Exception e) {
-                    sendResponse(exchange, 400, "{\"error\":\"" + e.getMessage() + "\"}");
-                }
+                } catch (Exception e) { sendResponse(exchange, 400, "{\"error\":\"" + e.getMessage() + "\"}"); }
             }
         });
-        
+
+        // Standard Endpoints
+        server.createContext("/api/status", exchange -> sendResponse(exchange, 200, "{\"status\":\"online\"}"));
+        server.createContext("/api/nodes", exchange -> sendResponse(exchange, 200, gson.toJson(engine.getAllNodes())));
         server.createContext("/api/search", exchange -> {
-            String query = exchange.getRequestURI().getQuery();
-            if (query != null && query.startsWith("q=")) {
-                String term = query.split("=")[1].toLowerCase();
-                List<Node> matches = engine.search(term);
+            String q = exchange.getRequestURI().getQuery();
+            if (q != null && q.startsWith("q=")) {
+                List<Node> matches = engine.search(q.split("=")[1].toLowerCase());
                 sendResponse(exchange, 200, gson.toJson(matches));
-            } else {
-                sendResponse(exchange, 400, "Missing query param 'q'");
-            }
+            } else { sendResponse(exchange, 400, "Missing q"); }
         });
 
         server.start();
         System.out.println(" [WEB] Dashboard available at http://localhost:" + port);
     }
 
-    public void stop() {
-        if (server != null) {
-            server.stop(0);
-            server = null;
-        }
-    }
+    public void stop() { if (server != null) { server.stop(0); server = null; } }
 
     private void sendResponse(HttpExchange exchange, int statusCode, String response) throws IOException {
-        if (!exchange.getResponseHeaders().containsKey("Content-Type")) {
-            exchange.getResponseHeaders().set("Content-Type", "application/json");
-        }
+        if (!exchange.getResponseHeaders().containsKey("Content-Type")) exchange.getResponseHeaders().set("Content-Type", "application/json");
         byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
         exchange.sendResponseHeaders(statusCode, bytes.length);
-        try (OutputStream os = exchange.getResponseBody()) {
-            os.write(bytes);
-        }
+        try (OutputStream os = exchange.getResponseBody()) { os.write(bytes); }
     }
 
     private <T> T parseBody(HttpExchange exchange, Class<T> clazz) {
         return gson.fromJson(new InputStreamReader(exchange.getRequestBody()), clazz);
     }
 
-    private static class NodeDTO { String id; String label; Map<String, String> props; }
-    private static class LinkDTO { String from; String to; String type; }
+    private static class NodeDTO { String id; String label; Map<String, Object> props; }
+    
+    // Updated LinkDTO
+    private static class LinkDTO { 
+        String from; 
+        String to; 
+        String type; 
+        Map<String, Object> props; 
+    }
     
     private static class GraphDTO {
         Collection<Node> nodes;
