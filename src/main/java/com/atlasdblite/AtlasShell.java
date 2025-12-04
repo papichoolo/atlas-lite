@@ -78,7 +78,7 @@ public class AtlasShell {
         System.out.println("  / _ \\| __| |/ _` / __|| | | |  _ \\ ");
         System.out.println(" / ___ \\ |_| | (_| \\__ \\| |_| | |_) |");
         System.out.println("/_/   \\_\\__|_|\\__,_|___/|____/|____/ ");
-        System.out.println("      ATLASDB-LITE v3.5      ");
-        System.out.println("   Sharded | Encrypted | 'help' for commands ");
+        System.out.println("      ATLASDB-LITE v4.0      ");
+        System.out.println("    Encrypted | Dashboard | 'help' for commands ");
     }
 }
