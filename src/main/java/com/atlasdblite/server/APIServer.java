@@ -14,33 +14,21 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 
-/**
- * Embedded HTTP Server for the AtlasDB-Lite API.
- * Provides endpoints for CRUD operations, searching, and visualization.
- */
 public class APIServer {
     private final GraphEngine engine;
     private HttpServer server;
     private final Gson gson;
 
-    /**
-     * Initializes the API Server.
-     * @param engine The backing graph engine.
-     */
     public APIServer(GraphEngine engine) {
         this.engine = engine;
         this.gson = new Gson();
     }
 
-    /**
-     * Starts the HTTP Server on the specified port.
-     * @param port The port to listen on.
-     * @throws IOException If the port is busy or server fails to start.
-     */
     public void start(int port) throws IOException {
         if (server != null) return;
         server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -67,7 +55,7 @@ public class APIServer {
             sendResponse(exchange, 200, gson.toJson(dto));
         });
 
-        // 3. Create Node (Supports Lists)
+        // 3. Create Node
         server.createContext("/api/node", exchange -> {
             if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
                 try {
@@ -82,18 +70,21 @@ public class APIServer {
             }
         });
 
-        // 4. Standard Endpoints
-        server.createContext("/api/status", exchange -> sendResponse(exchange, 200, "{\"status\":\"online\"}"));
-        server.createContext("/api/nodes", exchange -> sendResponse(exchange, 200, gson.toJson(engine.getAllNodes())));
+        // 4. Create Link (Updated for Props)
         server.createContext("/api/link", exchange -> {
             if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
                 try {
                     LinkDTO dto = parseBody(exchange, LinkDTO.class);
-                    engine.persistRelation(dto.from, dto.to, dto.type);
+                    Map<String, Object> props = dto.props != null ? dto.props : new HashMap<>();
+                    engine.persistRelation(dto.from, dto.to, dto.type, props);
                     sendResponse(exchange, 201, "{\"message\":\"Link Created\"}");
                 } catch (Exception e) { sendResponse(exchange, 400, "{\"error\":\"" + e.getMessage() + "\"}"); }
             }
         });
+
+        // Standard Endpoints
+        server.createContext("/api/status", exchange -> sendResponse(exchange, 200, "{\"status\":\"online\"}"));
+        server.createContext("/api/nodes", exchange -> sendResponse(exchange, 200, gson.toJson(engine.getAllNodes())));
         server.createContext("/api/search", exchange -> {
             String q = exchange.getRequestURI().getQuery();
             if (q != null && q.startsWith("q=")) {
@@ -119,14 +110,16 @@ public class APIServer {
         return gson.fromJson(new InputStreamReader(exchange.getRequestBody()), clazz);
     }
 
-    // UPDATED DTO: Props is now Map<String, Object> to allow Lists
-    private static class NodeDTO { 
-        String id; 
-        String label; 
+    private static class NodeDTO { String id; String label; Map<String, Object> props; }
+    
+    // Updated LinkDTO
+    private static class LinkDTO { 
+        String from; 
+        String to; 
+        String type; 
         Map<String, Object> props; 
     }
     
-    private static class LinkDTO { String from; String to; String type; }
     private static class GraphDTO {
         Collection<Node> nodes;
         List<Relation> edges;

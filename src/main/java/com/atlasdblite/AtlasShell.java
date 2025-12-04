@@ -25,23 +25,24 @@ public class AtlasShell {
         registry.register(new PathCommand()); 
         
         registry.register(new StatsCommand());
-        registry.register(new BackupCommand()); // Updated Logic
+        registry.register(new BackupCommand());
         registry.register(new ExportCommand());
         registry.register(new NukeCommand());
         registry.register(new ServerCommand());
         registry.register(new IndexCommand());
         registry.register(new ExitCommand());
-        registry.register(new ClearCommand()); // NEW: Register Clear
+        registry.register(new ClearCommand());
 
         Scanner scanner = new Scanner(System.in);
-
+        
         // Clear screen before banner
         System.out.print("\033[H\033[2J");
         System.out.flush();
+        
         printBanner();
 
         while (true) {
-            System.out.print("atlas> ");
+            System.out.print("atlas-sharded> ");
             String input = scanner.nextLine().trim();
 
             if (input.isEmpty()) continue;
@@ -52,7 +53,13 @@ public class AtlasShell {
             
             if (cmd != null) {
                 try {
+                    long startTime = System.nanoTime();
                     cmd.execute(tokens, engine);
+                    long endTime = System.nanoTime();
+                    
+                    double durationMs = (endTime - startTime) / 1_000_000.0;
+                    System.out.printf(" [TIME] %.2f ms%n", durationMs);
+                    
                 } catch (Exception e) {
                     System.out.println(" [CRASH] " + e.getMessage());
                 }
