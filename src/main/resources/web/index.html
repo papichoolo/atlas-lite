@@ -91,6 +91,7 @@
             display: flex;
             gap: 8px;
             margin-top: 12px;
+            position: relative;
         }
 
         input {
@@ -106,6 +107,56 @@
         input:focus {
             outline: 2px solid var(--accent);
             border-color: transparent;
+        }
+
+        /* Search Dropdown */
+        .search-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 100%;
+            background: #161b22;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            margin-top: 4px;
+            max-height: 250px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        .search-dropdown.visible {
+            display: block;
+        }
+
+        .search-item {
+            padding: 8px 12px;
+            border-bottom: 1px solid #21262d;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .search-item:last-child {
+            border-bottom: none;
+        }
+
+        .search-item:hover {
+            background: #21262d;
+        }
+
+        .search-main {
+            color: #e6edf3;
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .search-sub {
+            color: #8b949e;
+            font-size: 11px;
+            margin-top: 2px;
         }
 
         button {
@@ -133,6 +184,12 @@
 
         button.secondary:hover {
             background: #30363d;
+        }
+
+        button.active {
+            background: #a371f7;
+            color: white;
+            border-color: #a371f7;
         }
 
         /* Properties Table */
@@ -186,13 +243,15 @@
         <p id="stats-text">Waiting for data...</p>
 
         <div class="controls" style="margin-top: 16px;">
-            <input type="text" id="search-box" placeholder="Find node by ID or Label..." onkeyup="handleSearch(event)">
+            <input type="text" id="search-box" placeholder="Search ID, Label, or Props..." onkeyup="handleSearch(event)"
+                onfocus="handleSearch(event)" autocomplete="off">
+            <div id="search-results" class="search-dropdown"></div>
         </div>
 
         <div class="controls">
             <button onclick="fetchGraph()">↻ Reload</button>
             <button class="secondary" onclick="fitGraph()">⛶ Fit</button>
-            <button class="secondary" onclick="togglePhysics()">⚛ Physics</button>
+            <button class="secondary" id="clusterBtn" onclick="toggleClustering()">Cluster</button>
         </div>
 
         <div id="legend-container" class="legend"></div>
@@ -212,12 +271,12 @@
     <script>
         let network;
         let physicsEnabled = true;
+        let isClustered = false;
         const nodes = new vis.DataSet([]);
         const edges = new vis.DataSet([]);
 
         // Color Palette for Auto-Coloring Labels
         const colors = ['#2f81f7', '#d2a8ff', '#7ee787', '#ff7b72', '#f2cc60', '#a5d6ff', '#ffa657'];
-        // CHANGED: const -> let so we can reset it in fetchGraph()
         let labelColorMap = {};
 
         function getColorForLabel(label) {
@@ -265,11 +324,24 @@
             // Click Event
             network.on("click", function (params) {
                 if (params.nodes.length > 0) {
-                    showDetails(params.nodes[0]);
-                } else if (params.edges.length > 0) {
-                    // Optional: Show edge details?
+                    const nodeId = params.nodes[0];
+                    if (network.isCluster(nodeId)) {
+                        // Optional: single click behavior on cluster
+                    } else {
+                        showDetails(nodeId);
+                    }
                 } else {
                     closeDetails();
+                }
+            });
+
+            // Double Click to open cluster
+            network.on("doubleClick", function (params) {
+                if (params.nodes.length === 1) {
+                    const nodeId = params.nodes[0];
+                    if (network.isCluster(nodeId)) {
+                        network.openCluster(nodeId);
+                    }
                 }
             });
 
@@ -279,6 +351,10 @@
         async function fetchGraph() {
             const status = document.getElementById('stats-text');
             status.innerText = "Fetching data...";
+
+            // Reset clustering state on reload
+            isClustered = false;
+            document.getElementById('clusterBtn').classList.remove('active');
 
             try {
                 const response = await fetch('/api/graph');
@@ -291,7 +367,6 @@
                 // Process Nodes
                 const visNodes = graph.nodes.map(n => {
                     const color = getColorForLabel(n.label);
-                    // Size based on rough degree connectivity logic (optional) or static
                     return {
                         id: n.id,
                         label: n.label.length > 10 ? n.label.substring(0, 8) + '..' : n.label, // Short label on graph
@@ -324,8 +399,51 @@
             }
         }
 
+        function toggleClustering() {
+            const btn = document.getElementById('clusterBtn');
+            if (isClustered) {
+                // Open all clusters
+                const nodeIndices = network.body.nodeIndices;
+                for (let i = 0; i < nodeIndices.length; i++) {
+                    const nodeId = nodeIndices[i];
+                    if (network.isCluster(nodeId)) {
+                        network.openCluster(nodeId);
+                    }
+                }
+                btn.classList.remove('active');
+                isClustered = false;
+            } else {
+                // Cluster by Label
+                const uniqueLabels = Object.keys(labelColorMap);
+
+                for (const label of uniqueLabels) {
+                    const color = labelColorMap[label];
+                    const clusterOptions = {
+                        joinCondition: function (childOptions) {
+                            return childOptions.data && childOptions.data.label === label;
+                        },
+                        clusterNodeProperties: {
+                            id: 'cluster:' + label,
+                            label: label,
+                            color: color,
+                            borderWidth: 3,
+                            shape: 'box',
+                            font: { size: 20, face: 'Inter', color: '#ffffff' },
+                            shadow: true,
+                            allowSingleNodeCluster: true
+                        }
+                    };
+                    network.cluster(clusterOptions);
+                }
+                btn.classList.add('active');
+                isClustered = true;
+            }
+        }
+
         function showDetails(nodeId) {
             const node = nodes.get(nodeId).data;
+            if (!node) return; // Cluster node check
+
             const panel = document.getElementById('details-panel');
             const table = document.getElementById('prop-table');
             const title = document.getElementById('node-title');
@@ -355,6 +473,7 @@
                 scale: 1.2,
                 animation: { duration: 500, easingFunction: 'easeInOutQuad' }
             });
+            network.selectNodes([nodeId]);
         }
 
         function closeDetails() {
@@ -380,20 +499,69 @@
         }
 
         function handleSearch(e) {
-            if (e.key === 'Enter') {
-                const term = e.target.value.toLowerCase();
-                const found = nodes.get().find(n =>
-                    n.id.toLowerCase().includes(term) ||
-                    n.data.label.toLowerCase().includes(term)
-                );
+            const term = e.target.value.toLowerCase();
+            const resultsContainer = document.getElementById('search-results');
 
-                if (found) {
-                    showDetails(found.id);
-                } else {
-                    alert('Node not found in current view.');
+            if (term.length < 1) {
+                resultsContainer.classList.remove('visible');
+                return;
+            }
+
+            // Fuzzy-ish search: matches ID, Label, or Property Values
+            const allNodes = nodes.get();
+            const matches = allNodes.filter(n => {
+                // Check ID & Label
+                if (n.id.toLowerCase().includes(term)) return true;
+                if (n.data.label.toLowerCase().includes(term)) return true;
+
+                // Check Properties
+                if (n.data.properties) {
+                    return Object.values(n.data.properties).some(val =>
+                        String(val).toLowerCase().includes(term)
+                    );
                 }
+                return false;
+            }).slice(0, 10); // Limit to top 10 results
+
+            // Render Results
+            if (matches.length > 0) {
+                resultsContainer.innerHTML = matches.map(n => `
+                    <div class="search-item" onclick="selectSearchResult('${n.id}')">
+                        <div>
+                            <div class="search-main">${n.data.label}</div>
+                            <div class="search-sub">${n.id}</div>
+                        </div>
+                        <div class="badge" style="color:${n.color.border};border-color:${n.color.border}">Match</div>
+                    </div>
+                `).join('');
+                resultsContainer.classList.add('visible');
+            } else {
+                resultsContainer.innerHTML = `<div class="search-item" style="cursor:default;color:#8b949e;justify-content:center">No matches found</div>`;
+                resultsContainer.classList.add('visible');
             }
         }
+
+        function selectSearchResult(nodeId) {
+            document.getElementById('search-results').classList.remove('visible');
+            // If clustered, uncluster to find node
+            if (isClustered) {
+                toggleClustering();
+            }
+
+            // Give physics a moment to settle if unclustered
+            setTimeout(() => {
+                showDetails(nodeId);
+            }, 100);
+        }
+
+        // Close search on click outside
+        document.addEventListener('click', function (e) {
+            const container = document.querySelector('.controls');
+            const dropdown = document.getElementById('search-results');
+            if (!container.contains(e.target)) {
+                dropdown.classList.remove('visible');
+            }
+        });
 
         init();
     </script>
