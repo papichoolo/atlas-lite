@@ -4,40 +4,45 @@ import com.atlasdblite.engine.GraphEngine;
 import com.atlasdblite.models.Node;
 import java.util.List;
 
-/**
- * Command to perform a simple graph traversal.
- * It finds all nodes that are connected to a given starting node by a specific relationship type.
- */
 public class QueryCommand extends AbstractCommand {
     @Override
     public String getName() { return "query"; }
 
     @Override
-    public String getDescription() { return "Finds related nodes. Usage: query <id> <relation_type>"; }
+    public String getDescription() { return "Finds related nodes. Usage: query <search_term> <relation_type>"; }
 
-    /**
-     * Executes the traversal query.
-     *
-     * @param args Command arguments containing the starting node ID and the relationship type.
-     * @param engine The {@link GraphEngine} instance to perform the traversal on.
-     */
     @Override
     public void execute(String[] args, GraphEngine engine) {
-        if (!validateArgs(args, 2, "query <id> <relation_type>")) return;
+        if (!validateArgs(args, 2, "query <search_term> <relation_type>")) return;
 
-        String startId = args[1];
+        String searchTerm = args[1];
         String relType = args[2];
+
+        // 1. Resolve the Start Node (Handle Fuzzy Search / Menu)
+        System.out.println(" ... Resolving Start Node: '" + searchTerm + "'");
+        Node startNode = resolveNode(searchTerm, engine);
         
-        // The engine's traverse method handles the logic of finding connected nodes.
-        List<Node> results = engine.traverse(startId, relType);
+        if (startNode == null) {
+            // resolveNode prints its own errors (cancelled/not found)
+            return;
+        }
+
+        // 2. Run Traversal using the resolved ID
+        List<Node> results = engine.traverse(startNode.getId(), relType);
         
-        System.out.println("Search Results (" + startId + " -[:" + relType + "]-> ? )");
+        // 3. Display Results
+        System.out.println("\n [QUERY RESULT] " + startNode.getLabel() + " (" + startNode.getId() + ")");
+        System.out.println("      |");
+        System.out.println("      +---[:" + relType.toUpperCase() + "]---> ?");
+        System.out.println("      |");
+        
         if (results.isEmpty()) {
-            System.out.println(" > No matching nodes found.");
+            System.out.println("      x (No connections found)");
         } else {
             for (Node n : results) {
-                System.out.println(" > Found: " + n);
+                System.out.println("      +--> " + n.toString());
             }
         }
+        System.out.println();
     }
 }

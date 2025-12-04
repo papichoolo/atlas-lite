@@ -4,26 +4,13 @@ import com.atlasdblite.engine.GraphEngine;
 import com.atlasdblite.commands.*;
 import java.util.Scanner;
 
-/**
- * The main entry point for the AtlasDB-Lite interactive shell.
- * This class initializes the database engine, registers all available commands,
- * and enters a read-eval-print loop (REPL) to process user input.
- */
 public class AtlasShell {
-    /** The default directory where database files are stored. */
     private static final String DB_DIR = "atlas_db";
 
-    /**
-     * The main method that launches the shell.
-     *
-     * @param args Command-line arguments (not used).
-     */
     public static void main(String[] args) {
-        // Initialize the core graph engine with the specified database directory.
         GraphEngine engine = new GraphEngine(DB_DIR);
         CommandRegistry registry = new CommandRegistry();
 
-        // Register all available commands for the shell.
         registry.register(new AddNodeCommand());
         registry.register(new UpdateNodeCommand());
         registry.register(new DeleteNodeCommand());
@@ -32,43 +19,41 @@ public class AtlasShell {
         registry.register(new UpdateLinkCommand());
         
         registry.register(new ShowCommand());
-        registry.register(new SelectCommand()); 
+        registry.register(new SelectCommand());
         registry.register(new QueryCommand());
         registry.register(new SearchCommand());
         registry.register(new PathCommand()); 
         
         registry.register(new StatsCommand());
-        registry.register(new BackupCommand());
+        registry.register(new BackupCommand()); // Updated Logic
         registry.register(new ExportCommand());
         registry.register(new NukeCommand());
         registry.register(new ServerCommand());
         registry.register(new IndexCommand());
         registry.register(new ExitCommand());
+        registry.register(new ClearCommand()); // NEW: Register Clear
 
         Scanner scanner = new Scanner(System.in);
+
+        // Clear screen before banner
+        System.out.print("\033[H\033[2J");
+        System.out.flush();
         printBanner();
 
-        // Start the main Read-Eval-Print-Loop (REPL).
         while (true) {
-            System.out.print("atlas-sharded> ");
+            System.out.print("atlas> ");
             String input = scanner.nextLine().trim();
 
             if (input.isEmpty()) continue;
-            if (input.equalsIgnoreCase("help")) { 
-                registry.printHelp(); 
-                continue; 
-            }
+            if (input.equalsIgnoreCase("help")) { registry.printHelp(); continue; }
             
-            // Parse the input into command and arguments.
             String[] tokens = input.split("\\s+");
             Command cmd = registry.get(tokens[0]);
             
             if (cmd != null) {
                 try {
-                    // Execute the command.
                     cmd.execute(tokens, engine);
                 } catch (Exception e) {
-                    // Catch and display any errors that occur during command execution.
                     System.out.println(" [CRASH] " + e.getMessage());
                 }
             } else {
@@ -86,7 +71,7 @@ public class AtlasShell {
         System.out.println("  / _ \\| __| |/ _` / __|| | | |  _ \\ ");
         System.out.println(" / ___ \\ |_| | (_| \\__ \\| |_| | |_) |");
         System.out.println("/_/   \\_\\__|_|\\__,_|___/|____/|____/ ");
-        System.out.println("      ATLASDB-LITE v3.4      ");
+        System.out.println("      ATLASDB-LITE v3.5      ");
         System.out.println("   Sharded | Encrypted | 'help' for commands ");
     }
 }
