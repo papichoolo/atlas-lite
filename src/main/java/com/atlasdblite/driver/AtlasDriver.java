@@ -2,8 +2,6 @@ package com.atlasdblite.driver;
 
 import java.io.*;
 import java.net.Socket;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * AtlasDriver provides a programmatic interface to a running AtlasDB-Lite server.
